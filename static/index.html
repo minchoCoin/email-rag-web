@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Email RAG</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main id="app" class="app">
+    <section class="pane mail-list-pane">
+      <header class="bar">
+        <div>
+          <div class="title">Email List</div>
+          <div id="dbHint" class="subtitle">bge-m3 RAG index</div>
+        </div>
+        <div class="spacer"></div>
+        <button id="toggleMail" class="toggle-button" type="button" title="Show email content" aria-label="Show email content">Show email</button>
+      </header>
+
+      <div class="index-controls">
+        <label for="indexTarget">Search unit</label>
+        <select id="indexTarget">
+          <option value="all" selected>All</option>
+          <option value="chunk">Chunk</option>
+          <option value="title">Title</option>
+          <option value="content">Content</option>
+        </select>
+        <label for="chunkTokens">Chunk</label>
+        <select id="chunkTokens">
+          <option value="512">512 tokens</option>
+          <option value="256">256 tokens</option>
+        </select>
+        <span id="indexStatus" class="muted"></span>
+      </div>
+
+      <div class="list-controls">
+        <label for="topK">top_k</label>
+        <input id="topK" type="number" min="1" max="50" value="8" />
+        <button id="loadRecent" type="button">Recent emails</button>
+      </div>
+
+      <div class="list-toolbar">
+        <span id="resultCount" class="muted"></span>
+        <span id="planSummary" class="muted"></span>
+      </div>
+      <div id="emailList" class="list"></div>
+    </section>
+
+    <section class="pane mail-detail" aria-label="Email content">
+      <header class="bar">
+        <div id="detailTitle" class="title">Email content</div>
+      </header>
+      <div id="mailContent" class="content">
+        <div class="empty">Select an email from the list.</div>
+      </div>
+    </section>
+
+    <section class="pane ai-pane">
+      <header class="bar">
+        <div>
+          <div class="title">AI Chat</div>
+          <div class="subtitle">Extracts keywords, date range, and sender for search</div>
+        </div>
+        <div class="spacer"></div>
+        <button id="themeToggle" type="button">Dark</button>
+        <button id="clearChat" type="button">Clear</button>
+      </header>
+      <form id="searchForm" class="searchbox">
+        <input id="search" autocomplete="off" placeholder="Enter a search query or question" />
+        <button class="primary" type="submit">Search / Generate</button>
+      </form>
+
+      <div id="chat" class="chat">
+        <div class="msg ai">Enter a search query or question. Codex will extract search filters, search the database, and generate an answer from the retrieved emails.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
