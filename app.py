@@ -29,6 +29,22 @@ TITLE_DB = ROOT / "rag_title.sqlite3"
 CONTENT_DB = ROOT / "rag_content.sqlite3"
 EMAIL_DB = ROOT / "rag_email.sqlite3"
 ACTIVE_DB = DEFAULT_DB
+GENERIC_SEARCH_KEYWORDS = {
+    "해야할일",
+    "할일",
+    "알려줘",
+    "찾아줘",
+    "검색",
+    "요약",
+    "메일",
+    "이메일",
+    "email",
+    "task",
+    "tasks",
+    "todo",
+    "todos",
+    "summary",
+}
 
 app = FastAPI(title="Email RAG")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -444,12 +460,6 @@ def sql_filters_from_plan(plan: dict):
         clauses.append("emails.date_sort <= ?")
         params.append(date_to)
 
-    keywords = [str(keyword).strip() for keyword in plan.get("keywords", []) if str(keyword).strip()]
-    for keyword in keywords:
-        like = f"%{keyword}%"
-        clauses.append("(emails.subject LIKE ? OR emails.body LIKE ? OR emails.from_addr LIKE ? OR emails.to_addr LIKE ?)")
-        params.extend([like, like, like, like])
-
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     return where, params
 
@@ -569,9 +579,13 @@ def normalize_search_plan(raw: dict, question: str) -> dict:
         keywords = [keywords]
     if not isinstance(keywords, list):
         keywords = []
-    keywords = [str(keyword).strip() for keyword in keywords if str(keyword).strip()]
-    if not keywords:
-        keywords = [question.strip()]
+    cleaned_keywords = []
+    for keyword in keywords:
+        keyword = str(keyword).strip()
+        normalized_keyword = re.sub(r"\s+", "", keyword).lower()
+        if keyword and normalized_keyword not in GENERIC_SEARCH_KEYWORDS:
+            cleaned_keywords.append(keyword)
+    keywords = cleaned_keywords
 
     plan = {
         "keywords": keywords[:8],
@@ -585,12 +599,24 @@ def normalize_search_plan(raw: dict, question: str) -> dict:
     return plan
 
 
+def build_semantic_query(question: str, plan: dict) -> str:
+    parts = [question.strip()]
+    for keyword in plan.get("keywords") or []:
+        keyword = str(keyword).strip()
+        if keyword and keyword not in question:
+            parts.append(keyword)
+    return "\n".join(part for part in parts if part)
+
+
 def extract_search_plan(question: str) -> dict:
     today = datetime.now().date().isoformat()
     prompt = (
         "Extract an email search plan from the Korean user question. "
         "Return only compact JSON with keys: keywords, date_from, date_to, sender. "
-        "keywords must be a list of short search terms suitable for SQL LIKE search. "
+        "keywords must be optional semantic hints for vector search, not mandatory SQL filters. "
+        "Do not include generic intent words such as 해야할 일, 할 일, 알려줘, 찾아줘, 요약, 메일, email, task, todo, summary. "
+        "Prefer concrete nouns, project names, course names, departments, event names, or exact terms from the question. "
+        "Use an empty keywords list when the question is broad or asks for general pending work. "
         "date_from/date_to must be YYYY-MM-DD or null. sender is a sender name or email substring, or null. "
         "Use sender only when the question explicitly names a sender/person/organization/email. "
         "Use the current date only to resolve relative dates. "
@@ -705,7 +731,7 @@ def api_get_email(
 @app.post("/api/search")
 def api_search(request: SearchRequest):
     plan = extract_search_plan(request.query)
-    search_query = " ".join(plan.get("keywords") or [request.query])
+    search_query = build_semantic_query(request.query, plan)
     return {
         "plan": plan,
         "results": search_emails(
@@ -721,7 +747,7 @@ def api_search(request: SearchRequest):
 def api_chat(request: ChatRequest):
     started = time.time()
     plan = extract_search_plan(request.message)
-    search_query = " ".join(plan.get("keywords") or [request.message])
+    search_query = build_semantic_query(request.message, plan)
     results = search_emails(
         search_query,
         limit=max(1, min(request.limit, 50)),
